@@ -109,12 +109,11 @@
 //! use curve25519_dalek::scalar::Scalar;
 //! use ed25519_dalek::SecretKey;
 //! use rand::rngs::OsRng;
-//! use rand_7::rngs::OsRng as OsRng_7;
 //! use vsss_rs::{curve25519::WrappedScalar, Shamir};
 //! use x25519_dalek::StaticSecret;
 //!
 //! let mut osrng = rand::rngs::OsRng::default();
-//! let sc = Scalar::random(&mut OsRng_7);
+//! let sc = Scalar::random(&mut OsRng);
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
 //! let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut osrng);

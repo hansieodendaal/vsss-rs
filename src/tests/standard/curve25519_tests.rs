@@ -4,7 +4,6 @@
 use curve25519_dalek::scalar::Scalar;
 use ed25519_dalek::SecretKey;
 use rand::rngs::OsRng;
-use rand_7::rngs::OsRng as OsRng_7;
 use x25519_dalek::StaticSecret;
 
 use super::{invalid::*, valid::*};
@@ -36,7 +35,7 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let sc = Scalar::random(&mut OsRng_7);
+    let sc = Scalar::random(&mut OsRng);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
     let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(sc.into(), &mut OsRng::default());
@@ -54,7 +53,7 @@ fn key_tests() {
 
 #[test]
 fn feldman_verifier_serde_test() {
-    let sk = Scalar::random(&mut OsRng_7);
+    let sk = Scalar::random(&mut OsRng);
     let res = Feldman { t: 2, n: 3 }.split_secret::<WrappedScalar, WrappedRistretto, OsRng>(
         sk.into(),
         None,
@@ -92,7 +91,7 @@ fn feldman_verifier_serde_test() {
 
 #[test]
 fn pedersen_verifier_serde_test() {
-    let sk = Scalar::random(&mut OsRng_7);
+    let sk = Scalar::random(&mut OsRng);
     let res = Pedersen { t: 2, n: 3 }.split_secret::<WrappedScalar, WrappedEdwards, OsRng>(
         sk.into(),
         None,

@@ -19,11 +19,11 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     ristretto::{CompressedRistretto, RistrettoPoint},
     scalar::Scalar,
-    traits::{Identity, IsIdentity},
+    traits::{Identity, IsIdentity, MultiscalarMul},
 };
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
-use rand_7::rngs::OsRng as OsRng_7;
+use rand::rngs::OsRng;
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
@@ -32,7 +32,6 @@ use serde::{
     Serialize,
     Serializer,
 };
-use sha3::Sha3_512;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 /// Wraps a ristretto25519 point
@@ -43,7 +42,7 @@ impl Group for WrappedRistretto {
     type Scalar = WrappedScalar;
 
     fn random(mut _rng: impl RngCore) -> Self {
-        Self(RistrettoPoint::random(&mut OsRng_7))
+        Self(RistrettoPoint::random(&mut OsRng))
     }
 
     fn identity() -> Self {
@@ -303,7 +302,10 @@ impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where E: de::Error {
         // deserialize compressed ristretto, then decompress
-        if let Some(ep) = CompressedRistretto::from_slice(v).decompress() {
+        if let Some(ep) = CompressedRistretto::from_slice(v)
+            .map_err(|e| E::custom(e))?
+            .decompress()
+        {
             return Ok(WrappedRistretto(ep));
         }
         Err(de::Error::custom("failed to deserialize CompressedRistretto"))
@@ -327,7 +329,14 @@ impl Group for WrappedEdwards {
     fn random(mut rng: impl RngCore) -> Self {
         let mut seed = [0u8; 32];
         rng.fill_bytes(&mut seed);
-        Self(EdwardsPoint::hash_from_bytes::<Sha3_512>(&seed))
+        let scalar1 = Scalar::from_bytes_mod_order(seed);
+        let mut seed = [0u8; 32];
+        rng.fill_bytes(&mut seed);
+        let scalar2 = Scalar::from_bytes_mod_order(seed);
+        let scalars = [scalar1, scalar2];
+        let points = [EdwardsPoint::identity(), EdwardsPoint::identity()];
+        let edwards_point = EdwardsPoint::multiscalar_mul(&scalars, &points);
+        Self(edwards_point)
     }
 
     fn identity() -> Self {
@@ -606,7 +615,10 @@ impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
     where E: de::Error {
         // deserialize compressed edwards y, then decompress
-        if let Some(ep) = CompressedEdwardsY::from_slice(v).decompress() {
+        if let Some(ep) = CompressedEdwardsY::from_slice(v)
+            .map_err(|e| E::custom(e))?
+            .decompress()
+        {
             return Ok(WrappedEdwards(ep));
         }
         Err(de::Error::custom("failed to deserialize CompressedEdwardsY"))
@@ -626,19 +638,19 @@ pub struct WrappedScalar(pub Scalar);
 
 impl Field for WrappedScalar {
     fn random(mut _rng: impl RngCore) -> Self {
-        Self(Scalar::random(&mut OsRng_7))
+        Self(Scalar::random(&mut OsRng))
     }
 
     fn zero() -> Self {
-        Self(Scalar::zero())
+        Self(Scalar::ZERO)
     }
 
     fn one() -> Self {
-        Self(Scalar::one())
+        Self(Scalar::ONE)
     }
 
     fn is_zero(&self) -> Choice {
-        Choice::from(u8::from(self.0 == Scalar::zero()))
+        Choice::from(u8::from(self.0 == Scalar::ZERO))
     }
 
     fn square(&self) -> Self {
@@ -667,7 +679,7 @@ impl PrimeField for WrappedScalar {
     const S: u32 = 32;
 
     fn from_repr(bytes: Self::Repr) -> CtOption<Self> {
-        CtOption::new(Self(Scalar::from_bits(bytes)), Choice::from(1u8))
+        CtOption::new(Self(Scalar::from_bytes_mod_order(bytes)), Choice::from(1u8))
     }
 
     fn to_repr(&self) -> Self::Repr {
@@ -913,7 +925,7 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
     where E: de::Error {
         let mut buf: [u8; 32] = Default::default();
         buf.copy_from_slice(v);
-        Ok(WrappedScalar(Scalar::from_bits(buf)))
+        Ok(WrappedScalar(Scalar::from_bytes_mod_order(buf)))
     }
 }
 
@@ -929,13 +941,13 @@ mod tests {
     use curve25519_dalek::{constants::RISTRETTO_BASEPOINT_POINT, scalar::Scalar};
     use ff::Field;
     use group::Group;
-    use rand_7::rngs::OsRng as OsRng_7;
+    use rand::rngs::OsRng;
 
     use crate::curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar};
 
     #[test]
     fn ristretto_to_edwards() {
-        let sk = Scalar::random(&mut OsRng_7);
+        let sk = Scalar::random(&mut OsRng);
         let pk = RISTRETTO_BASEPOINT_POINT * sk;
         let ek = WrappedEdwards::from(WrappedRistretto(pk));
         assert!(ek.0.is_torsion_free());
@@ -943,7 +955,6 @@ mod tests {
 
     #[test]
     fn serde_scalar() {
-        use rand::rngs::OsRng;
         let rng = OsRng::default();
         let ws1 = WrappedScalar::random(rng);
         // serialize
@@ -959,7 +970,6 @@ mod tests {
 
     #[test]
     fn serde_edwards() {
-        use rand::rngs::OsRng;
         let rng = OsRng::default();
         let ed1 = WrappedEdwards::random(rng);
         // serialize
