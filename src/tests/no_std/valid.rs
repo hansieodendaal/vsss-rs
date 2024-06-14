@@ -50,7 +50,7 @@ pub fn combine_single<F: PrimeField + Zeroize, G: Group + GroupEncoding + Defaul
 pub fn combine_all<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default + ScalarMul<F>, const S: usize>() {
     use rand::rngs::OsRng;
 
-    let mut rng = OsRng::default();
+    let mut rng = OsRng;
     let secret: F = F::random(&mut rng);
 
     let res = Shamir::<3, 5>::split_secret::<F, OsRng, S>(secret, &mut rng);

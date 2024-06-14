@@ -34,7 +34,9 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let serdes = FeldmanVerifierSerdes {
             generator: self.generator.to_bytes().as_ref().to_vec(),
             commitments: self
@@ -53,7 +55,9 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let group_elem = |v: &[u8], msg: &'static str| -> Result<G, D::Error> {
             let mut repr = G::Repr::default();
             repr.as_mut().copy_from_slice(v);

@@ -4,7 +4,7 @@ use core::ops::{AddAssign, Mul};
 
 use ff::PrimeField;
 use group::{Group, GroupEncoding, ScalarMul};
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 
 use super::{Polynomial, Share};
 use crate::{bytes_to_field, lib::*, util::bytes_to_group, Error};
@@ -39,7 +39,9 @@ impl Shamir {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         self.combine::<F, F>(shares, bytes_to_field)
     }
 
@@ -120,6 +122,36 @@ impl Shamir {
         (shares, polynomial)
     }
 
+    pub(crate) fn get_shares_and_polynomial_deterministic<F, R>(
+        &self,
+        secret: F,
+        rng: &mut R,
+    ) -> (Vec<Share>, Polynomial<F>)
+    where
+        F: PrimeField,
+        R: RngCore + CryptoRng + SeedableRng,
+        <R as SeedableRng>::Seed: Clone,
+        <F as PrimeField>::Repr: TryFrom<Vec<u8>>,
+    {
+        let polynomial = Polynomial::<F>::new_deterministic(secret, rng, self.t);
+        // Generate the shares of (x, y) coordinates
+        // x coordinates are incremental from [1, N+1). 0 is reserved for the secret
+        let mut shares = Vec::with_capacity(self.n);
+        let mut x = F::one();
+        for i in 0..self.n {
+            let y = polynomial.evaluate(x, self.t);
+            let mut t = Vec::with_capacity(1 + y.to_repr().as_ref().len());
+            #[allow(clippy::cast_possible_truncation)]
+            t.push((i + 1) as u8);
+            t.extend_from_slice(y.to_repr().as_ref());
+
+            shares.push(Share(t));
+
+            x += F::one();
+        }
+        (shares, polynomial)
+    }
+
     /// Calculate lagrange interpolation
     fn interpolate<F, S>(x_coordinates: &[F], y_coordinates: &[S]) -> S
     where
@@ -149,7 +181,9 @@ impl Shamir {
     }
 
     pub(crate) fn check_params<F>(&self, secret: Option<F>) -> Result<(), Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         if self.n < self.t {
             return Err(Error::SharingLimitLessThanThreshold);
         }

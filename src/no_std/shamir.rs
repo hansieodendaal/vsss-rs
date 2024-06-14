@@ -36,7 +36,9 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         Self::combine::<F, F, S>(shares, bytes_to_field)
     }
 
@@ -149,7 +151,9 @@ impl<const T: usize, const N: usize> Shamir<T, N> {
     }
 
     pub(crate) fn check_params<F>(secret: Option<F>) -> Result<(), Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         if N < T {
             return Err(Error::SharingLimitLessThanThreshold);
         }

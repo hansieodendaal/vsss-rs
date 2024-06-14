@@ -10,7 +10,7 @@ use rand_core::{CryptoRng, RngCore, SeedableRng};
 use zeroize::Zeroize;
 
 use super::{FeldmanVerifier, PedersenVerifier, Shamir, Share};
-use crate::{lib::*, Error};
+use crate::{curve25519::PseudoRandom, lib::*, Error};
 
 /// Result from calling Pedersen::split_secret
 #[derive(Clone, Debug)]
@@ -106,11 +106,76 @@ impl Pedersen {
         })
     }
 
+    /// Create shares from a secret (deterministic random).
+    /// F is the prime field
+    /// S is the number of bytes used to represent F.
+    /// `blinding` is the blinding factor.
+    /// If [`None`], a random value is generated in F.
+    /// `share_generator` is the generator point to use for shares.
+    /// If [`None`], the default generator is used.
+    /// `blind_factor_generator` is the generator point to use for blinding factor shares.
+    /// If [`None`], a random generator is used
+    pub fn split_secret_deterministic<F, G, R>(
+        &self,
+        secret: F,
+        blinding: Option<F>,
+        share_generator: Option<G>,
+        blind_factor_generator: Option<G>,
+        seed: [u8; 32],
+    ) -> Result<PedersenResult<F, G>, Error>
+    where
+        F: PrimeField + Zeroize + PseudoRandom,
+        G: Group + GroupEncoding + Default + ScalarMul<F>,
+        R: CryptoRng + RngCore + SeedableRng<Seed = [u8; 32]>,
+        <R as SeedableRng>::Seed: Clone,
+        <F as PrimeField>::Repr: TryFrom<Vec<u8>>,
+    {
+        let shamir = Shamir { t: self.t, n: self.n };
+        shamir.check_params(Some(secret))?;
+
+        let mut crng = R::from_seed(seed);
+
+        let g = share_generator.unwrap_or_else(G::generator);
+        let mut t = F::pseudo_random(&mut crng);
+        let h = blind_factor_generator.unwrap_or_else(|| G::generator() * t);
+        t.zeroize();
+
+        let blinding = blinding.unwrap_or_else(|| F::pseudo_random(&mut crng));
+        let (secret_shares, secret_polynomial) = shamir.get_shares_and_polynomial_deterministic(secret, &mut crng);
+        let (blind_shares, blinding_polynomial) = shamir.get_shares_and_polynomial_deterministic(blinding, &mut crng);
+
+        let mut feldman_commitments = Vec::with_capacity(self.t);
+        let mut pedersen_commitments = Vec::with_capacity(self.t);
+        // {(g^p0 h^r0), (g^p1, h^r1), ..., (g^pn, h^rn)}
+        for i in 0..self.t {
+            let g_i = g * secret_polynomial.coefficients[i];
+            let h_i = h * blinding_polynomial.coefficients[i];
+            feldman_commitments.push(g_i);
+            pedersen_commitments.push(g_i + h_i);
+        }
+        Ok(PedersenResult {
+            blinding,
+            blind_shares,
+            secret_shares,
+            verifier: PedersenVerifier {
+                generator: h,
+                commitments: pedersen_commitments,
+                feldman_verifier: FeldmanVerifier {
+                    generator: g,
+                    commitments: feldman_commitments,
+                    marker: PhantomData,
+                },
+            },
+        })
+    }
+
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F>(&self, shares: &[Share]) -> Result<F, Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         Shamir { t: self.t, n: self.n }.combine_shares::<F>(shares)
     }
 

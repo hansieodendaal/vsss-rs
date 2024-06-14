@@ -1,14 +1,7 @@
 // Copyright Michael Lodder. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 use bls12_381_plus::{
-    multi_miller_loop,
-    ExpandMsgXmd,
-    G1Affine,
-    G1Projective,
-    G2Affine,
-    G2Prepared,
-    G2Projective,
-    Scalar,
+    multi_miller_loop, ExpandMsgXmd, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Scalar,
 };
 use ff::Field;
 use group::{Curve, Group};
@@ -103,7 +96,7 @@ fn group_combine() {
 
 #[test]
 fn verifier_serde_test() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = Scalar::random(&mut osrng);
     let res = Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(sk, None, &mut osrng);
     assert!(res.is_ok());

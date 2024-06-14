@@ -21,7 +21,7 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
@@ -37,7 +37,7 @@ fn key_tests() {
 
 #[test]
 fn verifier_serde_test() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
     let res = Feldman::<2, 3>::split_secret::<Scalar, ProjectivePoint, OsRng, 33>(*nzs.as_ref(), None, &mut osrng);

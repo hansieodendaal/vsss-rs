@@ -23,10 +23,7 @@ use k256::{AffinePoint, CompressedPoint, EncodedPoint, FieldBytes, ProjectivePoi
 use rand_core::RngCore;
 use serde::{
     de::{self, Visitor},
-    Deserialize,
-    Deserializer,
-    Serialize,
-    Serializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -72,7 +69,8 @@ impl Group for WrappedProjectivePoint {
 }
 
 impl<T> Sum<T> for WrappedProjectivePoint
-where T: Borrow<WrappedProjectivePoint>
+where
+    T: Borrow<WrappedProjectivePoint>,
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -289,7 +287,9 @@ impl From<ProjectivePoint> for WrappedProjectivePoint {
 
 impl Serialize for WrappedProjectivePoint {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let ep = self.0.to_encoded_point(false);
         serializer.serialize_bytes(ep.as_bytes())
     }
@@ -305,7 +305,9 @@ impl<'de> Visitor<'de> for WrappedProjectivePointVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where E: de::Error {
+    where
+        E: de::Error,
+    {
         if let Ok(ep) = EncodedPoint::from_bytes(v) {
             let pp = ProjectivePoint::from_encoded_point(&ep);
             if pp.is_some().unwrap_u8() == 1u8 {
@@ -318,7 +320,9 @@ impl<'de> Visitor<'de> for WrappedProjectivePointVisitor {
 
 impl<'de> Deserialize<'de> for WrappedProjectivePoint {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         deserializer.deserialize_bytes(WrappedProjectivePointVisitor)
     }
 }
@@ -619,14 +623,18 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         self.0.serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         let scalar = Scalar::deserialize(deserializer)?;
         Ok(WrappedScalar(scalar))
     }
@@ -642,7 +650,7 @@ mod tests {
     fn serde_scalar() {
         use ff::Field;
 
-        let rng = rand::rngs::OsRng::default();
+        let rng = rand::rngs::OsRng;
         let ws1 = WrappedScalar::from(Scalar::random(rng));
         // serialize
         let res = serde_bare::to_vec(&ws1);
@@ -659,7 +667,7 @@ mod tests {
     fn serde_projective_point() {
         use group::Group;
 
-        let rng = rand::rngs::OsRng::default();
+        let rng = rand::rngs::OsRng;
         let wpp1 = WrappedProjectivePoint::from(ProjectivePoint::random(rng));
         // serialize
         let res = serde_bare::to_vec(&wpp1);

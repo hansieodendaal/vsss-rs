@@ -39,7 +39,7 @@
 //! use rand::rngs::OsRng;
 //! use vsss_rs::Shamir;
 //!
-//! let mut osrng = OsRng::default();
+//! let mut osrng = OsRng;
 //! let sk = SecretKey::random(&mut osrng);
 //! let nzs = sk.to_nonzero_scalar();
 //! // 32 for field size, 1 for identifier = 33
@@ -62,7 +62,7 @@
 //! use rand::rngs::OsRng;
 //! use vsss_rs::{secp256k1::WrappedScalar, Shamir};
 //!
-//! let mut osrng = OsRng::default();
+//! let mut osrng = OsRng;
 //! let sk = SecretKey::random(&mut osrng);
 //! let secret = WrappedScalar(*sk.to_nonzero_scalar());
 //! let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(secret, &mut osrng);
@@ -84,7 +84,7 @@
 //! use rand::rngs::OsRng;
 //! use vsss_rs::Feldman;
 //!
-//! let mut rng = OsRng::default();
+//! let mut rng = OsRng;
 //! let secret = Scalar::random(&mut rng);
 //! let res =
 //!     Feldman { t: 2, n: 3 }.split_secret::<Scalar, G1Projective, OsRng>(secret, None, &mut rng);
@@ -112,7 +112,7 @@
 //! use vsss_rs::{curve25519::WrappedScalar, Shamir};
 //! use x25519_dalek::StaticSecret;
 //!
-//! let mut osrng = rand::rngs::OsRng::default();
+//! let mut osrng = rand::rngs::OsRng;
 //! let sc = Scalar::random(&mut OsRng);
 //! let sk1 = StaticSecret::from(sc.to_bytes());
 //! let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
