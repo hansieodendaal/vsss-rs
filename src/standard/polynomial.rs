@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use ff::PrimeField;
-use rand_core::{CryptoRng, RngCore};
+use rand_core::{CryptoRng, RngCore, SeedableRng};
 
-use crate::lib::*;
+use crate::{curve25519::pseudo_random_scalar, lib::*};
 
 /// The polynomial used for generating the shares
 pub struct Polynomial<F: PrimeField + Copy + Default> {
@@ -23,6 +23,31 @@ impl<F: PrimeField + Copy + Default> Polynomial<F> {
         // Start at 1 since 0 is the intercept and not chosen at random
         for _ in 1..length {
             coefficients.push(F::random(&mut rng));
+        }
+        Self { coefficients }
+    }
+
+    /// Construct a deterministic polynomial with `N` degree using the specified intercept
+    pub fn new_deterministic<R>(intercept: F, rng: &mut R, length: usize) -> Self
+    where
+        R: CryptoRng + RngCore + SeedableRng,
+        <R as SeedableRng>::Seed: Clone,
+        <F as PrimeField>::Repr: TryFrom<Vec<u8>>,
+    {
+        let mut coefficients = Vec::with_capacity(length);
+
+        // Ensure intercept is set
+        coefficients.push(intercept);
+
+        // Assign random coefficients to polynomial
+        // Start at 1 since 0 is the intercept and not chosen at random
+        for _ in 1..length {
+            let scalar_bytes = pseudo_random_scalar(rng).to_bytes().to_vec();
+            if let Ok(repr) = F::Repr::try_from(scalar_bytes) {
+                if F::from_repr(repr).is_some().into() {
+                    coefficients.push(F::from_repr(repr).unwrap());
+                }
+            }
         }
         Self { coefficients }
     }

@@ -7,9 +7,7 @@ use rand::rngs::OsRng;
 use super::{invalid::*, valid::*};
 use crate::{
     secp256k1::{WrappedProjectivePoint, WrappedScalar},
-    Feldman,
-    FeldmanVerifier,
-    Shamir,
+    Feldman, FeldmanVerifier, Shamir,
 };
 
 #[test]
@@ -26,7 +24,7 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let secret = WrappedScalar(*sk.to_nonzero_scalar());
     let res = Shamir { t: 2, n: 3 }.split_secret::<WrappedScalar, OsRng>(secret, &mut osrng);
@@ -42,7 +40,7 @@ fn key_tests() {
 
 #[test]
 fn verifier_serde_test() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let secret = WrappedScalar(*sk.to_nonzero_scalar());
     let res =

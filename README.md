@@ -55,7 +55,7 @@ use p256::{NonZeroScalar, Scalar, SecretKey};
 use rand::rngs::OsRng;
 
 fn main() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
     // 32 for field size, 1 for identifier = 33
@@ -82,7 +82,7 @@ use k256::{NonZeroScalar, Scalar, SecretKey};
 use rand::rngs::OsRng;
 
 fn main() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = SecretKey::random(&mut osrng);
     let nzs = sk.to_nonzero_scalar();
     let res = Shamir::<2, 3>::split_secret::<Scalar, OsRng, 33>(*nzs.as_ref(), &mut osrng);
@@ -108,7 +108,7 @@ use ff::Field;
 use rand::rngs::OsRng;
 
 fn main() {
-    let mut rng = OsRng::default();
+    let mut rng = OsRng;
     let secret = Scalar::random(&mut rng);
     let res = Feldman::<2, 3>::split_secret::<Scalar, G1Projective, OsRng, 33>(secret, None, &mut rng);
     assert!(res.is_ok());
@@ -139,7 +139,7 @@ use rand::rngs::OsRng;
 use x25519_dalek::StaticSecret;
 
 fn main() {
-    let mut osrng = rand::rngs::OsRng::default();
+    let mut osrng = rand::rngs::OsRng;
     let sc = Scalar::random(&mut osrng);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();

@@ -9,12 +9,7 @@ use x25519_dalek::StaticSecret;
 use super::{invalid::*, valid::*};
 use crate::{
     curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar},
-    Feldman,
-    FeldmanVerifier,
-    Pedersen,
-    PedersenResult,
-    PedersenVerifier,
-    Shamir,
+    Feldman, FeldmanVerifier, Pedersen, PedersenResult, PedersenVerifier, Shamir,
 };
 
 #[test]
@@ -35,7 +30,7 @@ fn valid_tests() {
 
 #[test]
 fn key_tests() {
-    let mut osrng = rand::rngs::OsRng::default();
+    let mut osrng = rand::rngs::OsRng;
     let sc = Scalar::random(&mut osrng);
     let sk1 = StaticSecret::from(sc.to_bytes());
     let ske1 = SecretKey::from_bytes(&sc.to_bytes()).unwrap();
@@ -54,7 +49,7 @@ fn key_tests() {
 
 #[test]
 fn feldman_verifier_serde_test() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = Scalar::random(&mut osrng);
     let res = Feldman::<2, 3>::split_secret::<WrappedScalar, WrappedRistretto, OsRng, 33>(sk.into(), None, &mut osrng);
     assert!(res.is_ok());
@@ -89,7 +84,7 @@ fn feldman_verifier_serde_test() {
 
 #[test]
 fn pedersen_verifier_serde_test() {
-    let mut osrng = OsRng::default();
+    let mut osrng = OsRng;
     let sk = Scalar::random(&mut osrng);
     let res = Pedersen::<2, 3>::split_secret::<WrappedScalar, WrappedEdwards, OsRng, 33>(
         sk.into(),

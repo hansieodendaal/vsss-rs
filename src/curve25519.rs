@@ -23,14 +23,10 @@ use curve25519_dalek::{
 };
 use ff::{Field, PrimeField};
 use group::{Group, GroupEncoding};
-use rand::rngs::OsRng;
-use rand_core::RngCore;
+use rand_core::{CryptoRng, OsRng, RngCore, SeedableRng};
 use serde::{
     de::{self, Visitor},
-    Deserialize,
-    Deserializer,
-    Serialize,
-    Serializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
@@ -63,7 +59,8 @@ impl Group for WrappedRistretto {
 }
 
 impl<T> Sum<T> for WrappedRistretto
-where T: Borrow<WrappedRistretto>
+where
+    T: Borrow<WrappedRistretto>,
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -284,7 +281,9 @@ impl From<RistrettoPoint> for WrappedRistretto {
 
 impl Serialize for WrappedRistretto {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         // convert to compressed ristretto format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
     }
@@ -300,7 +299,9 @@ impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where E: de::Error {
+    where
+        E: de::Error,
+    {
         // deserialize compressed ristretto, then decompress
         if let Some(ep) = CompressedRistretto::from_slice(v)
             .map_err(|e| E::custom(e))?
@@ -314,7 +315,9 @@ impl<'de> Visitor<'de> for WrappedRistrettoVisitor {
 
 impl<'de> Deserialize<'de> for WrappedRistretto {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         deserializer.deserialize_bytes(WrappedRistrettoVisitor)
     }
 }
@@ -357,7 +360,8 @@ impl Group for WrappedEdwards {
 }
 
 impl<T> Sum<T> for WrappedEdwards
-where T: Borrow<WrappedEdwards>
+where
+    T: Borrow<WrappedEdwards>,
 {
     fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
         iter.fold(Self::identity(), |acc, item| acc + item.borrow())
@@ -597,7 +601,9 @@ impl From<WrappedRistretto> for WrappedEdwards {
 
 impl Serialize for WrappedEdwards {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         // convert to compressed edwards y format, then serialize
         serializer.serialize_bytes(self.0.compress().as_bytes())
     }
@@ -613,7 +619,9 @@ impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where E: de::Error {
+    where
+        E: de::Error,
+    {
         // deserialize compressed edwards y, then decompress
         if let Some(ep) = CompressedEdwardsY::from_slice(v)
             .map_err(|e| E::custom(e))?
@@ -627,7 +635,9 @@ impl<'de> Visitor<'de> for WrappedEdwardsVisitor {
 
 impl<'de> Deserialize<'de> for WrappedEdwards {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         deserializer.deserialize_bytes(WrappedEdwardsVisitor)
     }
 }
@@ -635,6 +645,63 @@ impl<'de> Deserialize<'de> for WrappedEdwards {
 /// Wraps a curve25519 scalar
 #[derive(Copy, Clone, Debug, Eq, Default)]
 pub struct WrappedScalar(pub Scalar);
+
+impl PseudoRandom for WrappedScalar {
+    fn pseudo_random<R>(rng: &mut R) -> Self
+    where
+        R: CryptoRng + RngCore + SeedableRng,
+        <R as SeedableRng>::Seed: Clone,
+    {
+        Self(pseudo_random_scalar(rng))
+    }
+}
+
+/// Produce a pseudo-random scalar from a seeded random number generator
+pub fn pseudo_random_scalar<R>(rng: &mut R) -> Scalar
+where
+    R: CryptoRng + RngCore + SeedableRng,
+    <R as SeedableRng>::Seed: Clone,
+{
+    let scalar_bytes_wide: [u8; 64] = pseudo_random_bytes(rng);
+    Scalar::from_bytes_mod_order_wide(&scalar_bytes_wide)
+}
+
+// Produce pseudo-random mod order wide from a seeded random number generator
+// Panics:
+//   This function will panic if N > 128
+fn pseudo_random_bytes<R, const N: usize>(rng: &mut R) -> [u8; N]
+where
+    R: CryptoRng + RngCore + SeedableRng,
+    <R as SeedableRng>::Seed: Clone,
+{
+    let chunks = if N % 8 == 0 { N / 8 } else { N / 8 + 1 };
+    let mut buffer = [0u8; 128];
+    for i in 0..chunks {
+        let mut random_bytes = [0u8; 8];
+        let u64_bytes = rng.next_u64().to_le_bytes();
+        u64_bytes
+            .iter()
+            .zip(random_bytes.iter_mut().take(u64_bytes.len()))
+            .for_each(|(a, b)| *b = *a);
+        random_bytes
+            .iter()
+            .zip(buffer.iter_mut().skip(i * 8).take(8))
+            .for_each(|(a, b)| *b = *a);
+    }
+    let mut result_bytes = [0u8; N];
+    result_bytes.copy_from_slice(&buffer[0..N]);
+    result_bytes
+}
+
+/// Produce a pseudo-random value from a seeded random number generator
+pub trait PseudoRandom {
+    /// Produce a pseudo-random value from a seeded random number generator
+    fn pseudo_random<R>(rng: &mut R) -> Self
+    where
+        R: CryptoRng + RngCore + SeedableRng,
+        <R as SeedableRng>::Seed: Clone,
+        Self: Sized;
+}
 
 impl Field for WrappedScalar {
     fn random(mut _rng: impl RngCore) -> Self {
@@ -907,7 +974,9 @@ impl zeroize::DefaultIsZeroes for WrappedScalar {}
 
 impl Serialize for WrappedScalar {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         serializer.serialize_bytes(self.0.as_bytes())
     }
 }
@@ -922,7 +991,9 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
     }
 
     fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
-    where E: de::Error {
+    where
+        E: de::Error,
+    {
         let mut buf: [u8; 32] = Default::default();
         buf.copy_from_slice(v);
         Ok(WrappedScalar(Scalar::from_bytes_mod_order(buf)))
@@ -931,7 +1002,9 @@ impl<'de> Visitor<'de> for WrappedScalarVisitor {
 
 impl<'de> Deserialize<'de> for WrappedScalar {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         deserializer.deserialize_bytes(WrappedScalarVisitor)
     }
 }
@@ -942,8 +1015,12 @@ mod tests {
     use ff::Field;
     use group::Group;
     use rand::rngs::OsRng;
+    use rand_chacha::ChaCha12Rng;
+    use rand_core::SeedableRng;
 
-    use crate::curve25519::{WrappedEdwards, WrappedRistretto, WrappedScalar};
+    use crate::curve25519::{
+        pseudo_random_bytes, pseudo_random_scalar, WrappedEdwards, WrappedRistretto, WrappedScalar,
+    };
 
     #[test]
     fn ristretto_to_edwards() {
@@ -955,7 +1032,7 @@ mod tests {
 
     #[test]
     fn serde_scalar() {
-        let rng = OsRng::default();
+        let rng = OsRng;
         let ws1 = WrappedScalar::random(rng);
         // serialize
         let res = serde_bare::to_vec(&ws1);
@@ -970,7 +1047,7 @@ mod tests {
 
     #[test]
     fn serde_edwards() {
-        let rng = OsRng::default();
+        let rng = OsRng;
         let ed1 = WrappedEdwards::random(rng);
         // serialize
         let res = serde_bare::to_vec(&ed1);
@@ -981,5 +1058,76 @@ mod tests {
         assert!(res.is_ok());
         let ed2: WrappedEdwards = res.unwrap();
         assert_eq!(ed1, ed2);
+    }
+
+    #[test]
+    fn test_pseudo_random_bytes() {
+        let random_bytes_11: [u8; 5] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let random_bytes_21: [u8; 5] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([1u8; 32]));
+        let random_bytes_12: [u8; 32] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let random_bytes_22: [u8; 32] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([1u8; 32]));
+        let random_bytes_13: [u8; 103] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let random_bytes_23: [u8; 103] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([1u8; 32]));
+        let random_bytes_14: [u8; 128] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let random_bytes_24: [u8; 128] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([1u8; 32]));
+
+        assert_eq!(random_bytes_11, random_bytes_12[0..random_bytes_11.len()]);
+        assert_eq!(random_bytes_12, random_bytes_13[0..random_bytes_12.len()]);
+        assert_eq!(random_bytes_13, random_bytes_14[0..random_bytes_13.len()]);
+        assert_eq!(
+            random_bytes_14,
+            [
+                155, 244, 154, 106, 7, 85, 249, 83, 129, 31, 206, 18, 95, 38, 131, 213, 4, 41, 195, 187, 73, 224, 116,
+                20, 126, 0, 137, 165, 46, 174, 21, 95, 5, 100, 248, 121, 210, 122, 227, 192, 44, 232, 40, 52, 172, 250,
+                140, 121, 58, 98, 159, 44, 160, 222, 105, 25, 97, 11, 232, 47, 65, 19, 38, 190, 11, 213, 136, 65, 32,
+                62, 116, 254, 134, 252, 113, 51, 140, 224, 23, 61, 198, 40, 235, 183, 25, 189, 203, 204, 21, 21, 133,
+                33, 76, 192, 137, 180, 66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30,
+                70, 202, 144, 81, 81, 192, 39, 68, 166, 176, 23, 230, 147, 22
+            ]
+        );
+
+        assert_eq!(random_bytes_21, random_bytes_22[0..random_bytes_21.len()]);
+        assert_eq!(random_bytes_22, random_bytes_23[0..random_bytes_22.len()]);
+        assert_eq!(random_bytes_23, random_bytes_24[0..random_bytes_23.len()]);
+        assert_eq!(
+            random_bytes_24,
+            [
+                51, 1, 232, 215, 231, 84, 219, 44, 245, 123, 10, 76, 167, 63, 37, 60, 112, 83, 173, 43, 197, 57, 135,
+                119, 186, 3, 155, 37, 142, 89, 173, 157, 255, 14, 44, 118, 82, 24, 125, 173, 249, 90, 55, 182, 196, 67,
+                39, 192, 210, 186, 181, 186, 56, 32, 240, 248, 152, 79, 191, 112, 111, 164, 53, 73, 59, 113, 62, 159,
+                42, 255, 27, 88, 115, 20, 186, 50, 214, 91, 144, 253, 251, 88, 164, 180, 120, 59, 24, 192, 153, 239,
+                42, 149, 57, 124, 67, 117, 97, 133, 43, 20, 102, 35, 82, 158, 14, 91, 92, 80, 100, 54, 114, 215, 201,
+                162, 204, 249, 35, 197, 209, 240, 35, 42, 93, 155, 35, 226, 58, 251
+            ]
+        );
+
+        let res = std::panic::catch_unwind(|| {
+            let _ = pseudo_random_bytes::<ChaCha12Rng, 129>(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        });
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_pseudo_random_scalar() {
+        let scalar_1a = pseudo_random_scalar(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let scalar_1b = pseudo_random_scalar(&mut ChaCha12Rng::from_seed([0u8; 32]));
+        let scalar_2a = pseudo_random_scalar(&mut ChaCha12Rng::from_seed([1u8; 32]));
+        let scalar_2b = pseudo_random_scalar(&mut ChaCha12Rng::from_seed([1u8; 32]));
+        assert_eq!(scalar_1a, scalar_1b);
+        assert_eq!(scalar_2a, scalar_2b);
+        assert_eq!(
+            scalar_1a.to_bytes(),
+            [
+                22, 33, 188, 127, 243, 114, 222, 165, 177, 158, 212, 131, 122, 34, 112, 164, 230, 48, 112, 90, 14, 78,
+                91, 42, 120, 206, 28, 215, 160, 190, 21, 0
+            ]
+        );
+        assert_eq!(
+            scalar_2a.to_bytes(),
+            [
+                55, 177, 57, 140, 215, 142, 37, 226, 81, 250, 70, 1, 156, 117, 25, 230, 177, 133, 156, 151, 166, 206,
+                226, 135, 162, 141, 96, 226, 108, 78, 121, 6
+            ]
+        );
     }
 }

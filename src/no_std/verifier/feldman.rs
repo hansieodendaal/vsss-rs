@@ -8,10 +8,7 @@ use group::{Group, GroupEncoding, ScalarMul};
 use serde::{
     de::{Error, SeqAccess, Unexpected, Visitor},
     ser::SerializeTuple,
-    Deserialize,
-    Deserializer,
-    Serialize,
-    Serializer,
+    Deserialize, Deserializer, Serialize, Serializer,
 };
 
 use super::super::share::Share;
@@ -35,7 +32,9 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where S: Serializer {
+    where
+        S: Serializer,
+    {
         let mut bytes = self.generator.to_bytes();
         let mut tv = serializer.serialize_tuple((T + 1) * bytes.as_ref().len())?;
         for b in bytes.as_ref() {
@@ -57,7 +56,9 @@ where
     G: Group + GroupEncoding + ScalarMul<F>,
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where D: Deserializer<'de> {
+    where
+        D: Deserializer<'de>,
+    {
         struct GroupVisitor<F, G, const T: usize>
         where
             F: PrimeField,
@@ -79,7 +80,9 @@ where
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-            where A: SeqAccess<'de> {
+            where
+                A: SeqAccess<'de>,
+            {
                 let mut group_elem = |offset: usize| -> Result<G, A::Error> {
                     let mut repr = G::Repr::default();
                     for (i, ptr) in repr.as_mut().iter_mut().enumerate() {

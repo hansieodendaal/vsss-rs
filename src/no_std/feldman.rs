@@ -46,18 +46,23 @@ impl<const T: usize, const N: usize> Feldman<T, N> {
             *p = g * polynomial.coefficients[i];
         }
 
-        Ok((shares, FeldmanVerifier {
-            generator: g,
-            commitments: vs,
-            marker: PhantomData,
-        }))
+        Ok((
+            shares,
+            FeldmanVerifier {
+                generator: g,
+                commitments: vs,
+                marker: PhantomData,
+            },
+        ))
     }
 
     /// Reconstruct a secret from shares created from `split_secret`.
     /// The X-coordinates operate in `F`
     /// The Y-coordinates operate in `F`
     pub fn combine_shares<F, const S: usize>(shares: &[Share<S>]) -> Result<F, Error>
-    where F: PrimeField {
+    where
+        F: PrimeField,
+    {
         Shamir::<T, N>::combine_shares::<F, S>(shares)
     }
 

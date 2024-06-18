@@ -48,7 +48,7 @@ pub fn combine_all<F: PrimeField + Zeroize, G: Group + GroupEncoding + Default +
     use rand::rngs::OsRng;
 
     let shamir = Shamir { t: 3, n: 5 };
-    let mut rng = OsRng::default();
+    let mut rng = OsRng;
     let secret: F = F::random(&mut rng);
 
     let res = shamir.split_secret::<F, OsRng>(secret, &mut rng);
