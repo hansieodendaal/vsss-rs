@@ -666,30 +666,16 @@ where
     Scalar::from_bytes_mod_order_wide(&scalar_bytes_wide)
 }
 
-// Produce pseudo-random mod order wide from a seeded random number generator
+// Produce pseudo-random of size 'N'
 // Panics:
-//   This function will panic if N > 128
+//   This function will panic if N results in a stack overflow
 fn pseudo_random_bytes<R, const N: usize>(rng: &mut R) -> [u8; N]
 where
     R: CryptoRng + RngCore + SeedableRng,
     <R as SeedableRng>::Seed: Clone,
 {
-    let chunks = if N % 8 == 0 { N / 8 } else { N / 8 + 1 };
-    let mut buffer = [0u8; 128];
-    for i in 0..chunks {
-        let mut random_bytes = [0u8; 8];
-        let u64_bytes = rng.next_u64().to_le_bytes();
-        u64_bytes
-            .iter()
-            .zip(random_bytes.iter_mut().take(u64_bytes.len()))
-            .for_each(|(a, b)| *b = *a);
-        random_bytes
-            .iter()
-            .zip(buffer.iter_mut().skip(i * 8).take(8))
-            .for_each(|(a, b)| *b = *a);
-    }
     let mut result_bytes = [0u8; N];
-    result_bytes.copy_from_slice(&buffer[0..N]);
+    rng.fill_bytes(&mut result_bytes);
     result_bytes
 }
 
@@ -1071,6 +1057,11 @@ mod tests {
         let random_bytes_14: [u8; 128] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([0u8; 32]));
         let random_bytes_24: [u8; 128] = pseudo_random_bytes(&mut ChaCha12Rng::from_seed([1u8; 32]));
 
+        assert_ne!(random_bytes_11, random_bytes_21);
+        assert_ne!(random_bytes_12, random_bytes_22);
+        assert_ne!(random_bytes_13, random_bytes_23);
+        assert_ne!(random_bytes_14, random_bytes_24);
+
         assert_eq!(random_bytes_11, random_bytes_12[0..random_bytes_11.len()]);
         assert_eq!(random_bytes_12, random_bytes_13[0..random_bytes_12.len()]);
         assert_eq!(random_bytes_13, random_bytes_14[0..random_bytes_13.len()]);
@@ -1100,11 +1091,6 @@ mod tests {
                 162, 204, 249, 35, 197, 209, 240, 35, 42, 93, 155, 35, 226, 58, 251
             ]
         );
-
-        let res = std::panic::catch_unwind(|| {
-            let _ = pseudo_random_bytes::<ChaCha12Rng, 129>(&mut ChaCha12Rng::from_seed([0u8; 32]));
-        });
-        assert!(res.is_err());
     }
 
     #[test]
